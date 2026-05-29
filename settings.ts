@@ -30,7 +30,7 @@ const DefaultConfig: AppConfig = {
   http_server: { port: 5000 },
   logging: { level: "info" },
   cameras: {},
-  discovery_ips: ["192.168.1.255"],
+  discovery_ips: ["192.168.1.255", "192.168.238.1"],
   blacklisted_ips: [],
 };
 
