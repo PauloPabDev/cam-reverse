@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <title>cam-reverse</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d0d0d;
+      --surface: #161616;
+      --border:  #2a2a2a;
+      --accent:  #e53935;
+      --text:    #e8e8e8;
+      --muted:   #6b6b6b;
+      --green:   #43a047;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    header .logo {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    header .count {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    main {
+      flex: 1;
+      padding: 32px 24px;
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.15s;
+    }
+
+    .card:hover { border-color: #444; }
+
+    .card-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #080808;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .card-body {
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.online  { background: var(--green); }
+    .status-dot.offline { background: var(--muted); }
+
+    .cam-info { flex: 1; min-width: 0; }
+
+    .cam-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cam-id {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: 'Courier New', monospace;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cam-arrow {
+      font-size: 16px;
+      color: var(--muted);
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 40px 0;
+    }
+
+    .loading {
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="logo">cam-reverse</span>
+    <span class="count" id="count"></span>
+  </header>
+
+  <main>
+    <div class="section-label">Cámaras</div>
+    <div class="grid" id="grid">
+      <span class="loading">Cargando...</span>
+    </div>
+  </main>
+
+  <script>
+  async function load() {
+    const res = await fetch('/api/cameras');
+    const { cameras } = await res.json();
+
+    const grid = document.getElementById('grid');
+    const count = document.getElementById('count');
+
+    count.textContent = `${cameras.length} cámara${cameras.length !== 1 ? 's' : ''}`;
+
+    if (cameras.length === 0) {
+      grid.innerHTML = '<span class="empty">No se han descubierto cámaras todavía.</span>';
+      return;
+    }
+
+    grid.innerHTML = cameras.map(cam => `
+      <a class="card" href="/ui/${cam.id}">
+        <div class="card-thumb">
+          <img src="/camera/${cam.id}" alt="${escHtml(cam.name)}">
+        </div>
+        <div class="card-body">
+          <span class="status-dot ${cam.connected ? 'online' : 'offline'}"></span>
+          <div class="cam-info">
+            <div class="cam-name">${escHtml(cam.name)}</div>
+            <div class="cam-id">${escHtml(cam.id)}</div>
+          </div>
+          <span class="cam-arrow">&#8250;</span>
+        </div>
+      </a>
+    `).join('');
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  load();
+  setInterval(load, 5000);
+  </script>
+
+</body>
+</html>

@@ -11,7 +11,9 @@ import { addExifToJpeg, createExifOrientation } from "./exif.js";
 // @ts-expect-error TS2307
 import favicon from "./cam.ico.gz";
 // @ts-expect-error TS2307
-import html_template from "./asd.html";
+import camera_html from "./asd.html";
+// @ts-expect-error TS2307
+import cameras_html from "./cameras.html";
 
 const BOUNDARY = "a very good boundary line";
 const responses: Record<string, http.ServerResponse[]> = {};
@@ -46,12 +48,8 @@ export const serveHttp = (port: number) => {
         res.end("Nothing online");
         return;
       }
-      const ui = html_template
-        .toString()
-        .replace(/\${id}/g, devId)
-        .replace(/\${name}/g, cameraName(devId))
-        .replace(/\${audio}/g, config.cameras[devId].audio ? "true" : "false");
-      res.end(ui);
+      res.setHeader("Content-Type", "text/html");
+      res.end(camera_html.toString());
       return;
     }
     if (req.url.startsWith("/audio/")) {
@@ -118,20 +116,33 @@ export const serveHttp = (port: number) => {
         responses[devId] = responses[devId].filter((r) => r !== res);
         logger.info(`Video stream closed for camera ${devId}`);
       });
+    } else if (req.url === "/api/cameras") {
+      const cameras = Object.keys(sessions).map((id) => ({
+        id,
+        name: cameraName(id),
+        connected: sessions[id].connected,
+      }));
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ cameras }));
+    } else if (req.url.startsWith("/api/camera/")) {
+      const devId = req.url.split("/")[3];
+      const s = sessions[devId];
+      if (!s) {
+        res.writeHead(404);
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Camera not found" }));
+        return;
+      }
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({
+        id: devId,
+        name: cameraName(devId),
+        audio: config.cameras[devId]?.audio ?? false,
+        connected: s.connected,
+      }));
     } else {
-      res.write("<html>");
-      res.write("<head>");
-      res.write(`<link rel="shortcut icon" href="/favicon.ico">`);
-      res.write("<title>All cameras</title>");
-      res.write("</head>");
-      res.write("<body>");
-      res.write("<h1>All cameras</h1><hr/>");
-      Object.keys(sessions).forEach((id) =>
-        res.write(`<h2>${cameraName(id)}</h2><a href="/ui/${id}"><img src="/camera/${id}"/></a><hr/>`),
-      );
-      res.write("</body>");
-      res.write("</html>");
-      res.end();
+      res.setHeader("Content-Type", "text/html");
+      res.end(cameras_html.toString());
     }
   });
 

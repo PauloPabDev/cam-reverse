@@ -1,103 +1,374 @@
-<html>
-	<head>
-	<link rel="shortcut icon" href="/favicon.ico">
-	<title>${name}</title>
-	</head><body>
-	<h2>${name}</h2><a href="/camera/${id}"><img style="height: 640px" src="/camera/${id}"/></a><hr/>
-	<button onclick="toggle_audio()" id=audio disabled=true>Audio: disabled</button>
-	<button onclick="fetch('/rotate/${id}')">Rotate</button>
-	<button onclick="fetch('/mirror/${id}')">Mirror</button>
-	<script>
-	const alaw_to_s16_table = [
-	  -5504, -5248, -6016, -5760, -4480, -4224, -4992, -4736, -7552, -7296, -8064, -7808, -6528, -6272, -7040, -6784, -2752,
-	  -2624, -3008, -2880, -2240, -2112, -2496, -2368, -3776, -3648, -4032, -3904, -3264, -3136, -3520, -3392, -22016,
-	  -20992, -24064, -23040, -17920, -16896, -19968, -18944, -30208, -29184, -32256, -31232, -26112, -25088, -28160,
-	  -27136, -11008, -10496, -12032, -11520, -8960, -8448, -9984, -9472, -15104, -14592, -16128, -15616, -13056, -12544,
-	  -14080, -13568, -344, -328, -376, -360, -280, -264, -312, -296, -472, -456, -504, -488, -408, -392, -440, -424, -88,
-	  -72, -120, -104, -24, -8, -56, -40, -216, -200, -248, -232, -152, -136, -184, -168, -1376, -1312, -1504, -1440, -1120,
-	  -1056, -1248, -1184, -1888, -1824, -2016, -1952, -1632, -1568, -1760, -1696, -688, -656, -752, -720, -560, -528, -624,
-	  -592, -944, -912, -1008, -976, -816, -784, -880, -848, 5504, 5248, 6016, 5760, 4480, 4224, 4992, 4736, 7552, 7296,
-	  8064, 7808, 6528, 6272, 7040, 6784, 2752, 2624, 3008, 2880, 2240, 2112, 2496, 2368, 3776, 3648, 4032, 3904, 3264,
-	  3136, 3520, 3392, 22016, 20992, 24064, 23040, 17920, 16896, 19968, 18944, 30208, 29184, 32256, 31232, 26112, 25088,
-	  28160, 27136, 11008, 10496, 12032, 11520, 8960, 8448, 9984, 9472, 15104, 14592, 16128, 15616, 13056, 12544, 14080,
-	  13568, 344, 328, 376, 360, 280, 264, 312, 296, 472, 456, 504, 488, 408, 392, 440, 424, 88, 72, 120, 104, 24, 8, 56,
-	  40, 216, 200, 248, 232, 152, 136, 184, 168, 1376, 1312, 1504, 1440, 1120, 1056, 1248, 1184, 1888, 1824, 2016, 1952,
-	  1632, 1568, 1760, 1696, 688, 656, 752, 720, 560, 528, 624, 592, 944, 912, 1008, 976, 816, 784, 880, 848,
-	];
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <title>Cámara — cam-reverse</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-	const alaw_to_s16 = (a_val) => {
-	  return alaw_to_s16_table[a_val];
-	};
+    :root {
+      --bg:        #0d0d0d;
+      --surface:   #161616;
+      --border:    #2a2a2a;
+      --accent:    #e53935;
+      --accent-dim:#7f1b1b;
+      --text:      #e8e8e8;
+      --muted:     #6b6b6b;
+      --green:     #43a047;
+    }
 
-	var audio_context;
-	const audio_button = document.getElementById('audio');
-	audio_button.disabled = !${audio};
-	update_audio_button();
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
 
-	function setup_audio() {
-		audio_context = new AudioContext();
-		const gain_node = audio_context.createGain(); // Declare gain node
-		const channels =1;
-		const sample_rate = 8000;
-		const audioBuffer = audio_context.createBuffer(channels, 960, sample_rate); // 960??
-		//const audioBuffer = audio_context.createBuffer(channels, decoded.length, sample_rate);
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
 
-		audio_context.onstatechange = () => {
-			console.log("Audio state is now ", audio_context.state);
-			update_audio_button(audio_context.state == "running");
-		};
+    header .logo {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
 
-		gain_node.connect(audio_context.destination); // Connect gain node to speakers
-		audio_context.resume();
+    header .sep { color: var(--border); font-size: 18px; }
 
-		const evtSource = new EventSource("/audio/${id}");
-		evtSource.onopen = (e) => {
-			console.log("evtsource open");
-		}
-		evtSource.onerror = (e) => {
-			console.log("evtsource error", e);
-		}
-		let endsAt = 0;
-		let startAt = 0;
-		evtSource.onmessage = (e) => {
-			const nowBuffering = audioBuffer.getChannelData(0);
-			const u8 = Uint8Array.from(atob(e.data), c => c.charCodeAt(0));
-			new Int16Array(u8).map(alaw_to_s16).forEach((el, i) => nowBuffering[i] = el / 0x8000 );
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
 
-			const source_node = audio_context.createBufferSource();
-			source_node.buffer = audioBuffer;
-			source_node.connect(gain_node);
-			const now = Date.now();
-			if(now > endsAt) { // lost packets
-				startAt = 0;
-			} else {
-				startAt += audioBuffer.duration;
-			}
-			source_node.start(startAt);
-			endsAt = now + audioBuffer.duration * 1000;
-		};
-	}
+    .live-badge {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
 
-	function update_audio_button(on) {
-		if (${audio}) {
-			audio_button.innerText = "Audio: " + (on ? "on \u{1F508}" : "off \u{1F507}");
-		}
-	}
+    .live-badge::before {
+      content: '';
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
 
-	function toggle_audio() {
-		if (audio_context == undefined) {
-			setup_audio();
-			return;
-		}
-		if (audio_context.state == "running") {
-			audio_context.suspend();
-			return;
-		}
-		if (audio_context.state == "suspended") {
-			audio_context.resume();
-			return;
-		}
-		console.log("Unknown audio stream status");
-	}
-	</script>
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+    }
+
+    .feed-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #080808;
+    }
+
+    .feed-wrapper img {
+      max-width: 100%;
+      max-height: calc(100vh - 130px);
+      border-radius: 4px;
+      display: block;
+      border: 1px solid var(--border);
+    }
+
+    .panel {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-section {
+      padding: 20px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      font-size: 13px;
+    }
+
+    .info-row .label { color: var(--muted); }
+
+    .info-row .value {
+      color: var(--text);
+      font-weight: 500;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      text-align: right;
+      word-break: break-all;
+      max-width: 110px;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 5px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 9px 14px;
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:last-child { margin-bottom: 0; }
+
+    .btn:hover:not(:disabled) {
+      background: #222;
+      border-color: #444;
+    }
+
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .btn.active {
+      border-color: var(--accent-dim);
+      background: rgba(229, 57, 53, 0.08);
+      color: #ef9a9a;
+    }
+
+    .btn-icon { font-size: 15px; line-height: 1; }
+
+    .back-link {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border);
+      margin-top: auto;
+    }
+
+    .back-link a {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.15s;
+    }
+
+    .back-link a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="logo">cam-reverse</span>
+    <span class="sep">/</span>
+    <h1 id="cam-name">—</h1>
+    <span class="live-badge">Live</span>
+  </header>
+
+  <main>
+    <div class="feed-wrapper">
+      <img id="feed" src="" alt="Video feed">
+    </div>
+
+    <aside class="panel">
+      <div class="panel-section">
+        <div class="section-label">Cámara</div>
+        <div class="info-row">
+          <span class="label">Nombre</span>
+          <span class="value" id="info-name">—</span>
+        </div>
+        <div class="info-row">
+          <span class="label">ID</span>
+          <span class="value" id="info-id">—</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Estado</span>
+          <span class="value"><span class="status-dot"></span>Online</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Audio</span>
+          <span class="value" id="info-audio">—</span>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-label">Controles</div>
+
+        <button class="btn" id="btn-audio" disabled onclick="toggle_audio()">
+          <span class="btn-icon">&#128264;</span>
+          <span id="audio-label">Audio</span>
+        </button>
+
+        <button class="btn" id="btn-rotate">
+          <span class="btn-icon">&#8635;</span>
+          Rotar
+        </button>
+
+        <button class="btn" id="btn-mirror">
+          <span class="btn-icon">&#8596;</span>
+          Espejo
+        </button>
+      </div>
+
+      <div class="back-link">
+        <a href="/">&#8592; Todas las cámaras</a>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+  const alaw_to_s16_table = [
+    -5504, -5248, -6016, -5760, -4480, -4224, -4992, -4736, -7552, -7296, -8064, -7808, -6528, -6272, -7040, -6784, -2752,
+    -2624, -3008, -2880, -2240, -2112, -2496, -2368, -3776, -3648, -4032, -3904, -3264, -3136, -3520, -3392, -22016,
+    -20992, -24064, -23040, -17920, -16896, -19968, -18944, -30208, -29184, -32256, -31232, -26112, -25088, -28160,
+    -27136, -11008, -10496, -12032, -11520, -8960, -8448, -9984, -9472, -15104, -14592, -16128, -15616, -13056, -12544,
+    -14080, -13568, -344, -328, -376, -360, -280, -264, -312, -296, -472, -456, -504, -488, -408, -392, -440, -424, -88,
+    -72, -120, -104, -24, -8, -56, -40, -216, -200, -248, -232, -152, -136, -184, -168, -1376, -1312, -1504, -1440, -1120,
+    -1056, -1248, -1184, -1888, -1824, -2016, -1952, -1632, -1568, -1760, -1696, -688, -656, -752, -720, -560, -528, -624,
+    -592, -944, -912, -1008, -976, -816, -784, -880, -848, 5504, 5248, 6016, 5760, 4480, 4224, 4992, 4736, 7552, 7296,
+    8064, 7808, 6528, 6272, 7040, 6784, 2752, 2624, 3008, 2880, 2240, 2112, 2496, 2368, 3776, 3648, 4032, 3904, 3264,
+    3136, 3520, 3392, 22016, 20992, 24064, 23040, 17920, 16896, 19968, 18944, 30208, 29184, 32256, 31232, 26112, 25088,
+    28160, 27136, 11008, 10496, 12032, 11520, 8960, 8448, 9984, 9472, 15104, 14592, 16128, 15616, 13056, 12544, 14080,
+    13568, 344, 328, 376, 360, 280, 264, 312, 296, 472, 456, 504, 488, 408, 392, 440, 424, 88, 72, 120, 104, 24, 8, 56,
+    40, 216, 200, 248, 232, 152, 136, 184, 168, 1376, 1312, 1504, 1440, 1120, 1056, 1248, 1184, 1888, 1824, 2016, 1952,
+    1632, 1568, 1760, 1696, 688, 656, 752, 720, 560, 528, 624, 592, 944, 912, 1008, 976, 816, 784, 880, 848,
+  ];
+
+  const alaw_to_s16 = (a_val) => alaw_to_s16_table[a_val];
+
+  // Extract camera ID from URL: /ui/<id>
+  const id = window.location.pathname.split('/')[2];
+
+  // Wire up static URLs that only need the ID
+  document.getElementById('feed').src = `/camera/${id}`;
+  document.getElementById('info-id').textContent = id;
+  document.getElementById('btn-rotate').onclick = () => fetch(`/rotate/${id}`);
+  document.getElementById('btn-mirror').onclick = () => fetch(`/mirror/${id}`);
+
+  // Fetch camera metadata from API
+  let audioEnabled = false;
+  fetch(`/api/camera/${id}`)
+    .then(r => r.json())
+    .then(cam => {
+      document.title = `${cam.name} — cam-reverse`;
+      document.getElementById('cam-name').textContent = cam.name;
+      document.getElementById('info-name').textContent = cam.name;
+      document.getElementById('info-audio').textContent = cam.audio ? 'Sí' : 'No';
+      audioEnabled = cam.audio;
+      document.getElementById('btn-audio').disabled = !audioEnabled;
+      update_audio_button();
+    });
+
+  // ── Audio ─────────────────────────────────────────────────
+  var audio_context;
+
+  function setup_audio() {
+    audio_context = new AudioContext();
+    const gain_node = audio_context.createGain();
+    const audioBuffer = audio_context.createBuffer(1, 960, 8000);
+
+    audio_context.onstatechange = () => {
+      console.log("Audio state:", audio_context.state);
+      update_audio_button(audio_context.state === "running");
+    };
+
+    gain_node.connect(audio_context.destination);
+    audio_context.resume();
+
+    const evtSource = new EventSource(`/audio/${id}`);
+    evtSource.onopen = () => console.log("evtsource open");
+    evtSource.onerror = (e) => console.log("evtsource error", e);
+
+    let endsAt = 0;
+    let startAt = 0;
+    evtSource.onmessage = (e) => {
+      const nowBuffering = audioBuffer.getChannelData(0);
+      const u8 = Uint8Array.from(atob(e.data), c => c.charCodeAt(0));
+      new Int16Array(u8).map(alaw_to_s16).forEach((el, i) => nowBuffering[i] = el / 0x8000);
+
+      const source_node = audio_context.createBufferSource();
+      source_node.buffer = audioBuffer;
+      source_node.connect(gain_node);
+      const now = Date.now();
+      if (now > endsAt) {
+        startAt = 0;
+      } else {
+        startAt += audioBuffer.duration;
+      }
+      source_node.start(startAt);
+      endsAt = now + audioBuffer.duration * 1000;
+    };
+  }
+
+  function update_audio_button(on) {
+    const label = document.getElementById('audio-label');
+    const btn = document.getElementById('btn-audio');
+    if (audioEnabled) {
+      label.textContent = "Audio: " + (on ? "activo" : "inactivo");
+      btn.classList.toggle('active', !!on);
+      btn.querySelector('.btn-icon').textContent = on ? '\u{1F50A}' : '\u{1F507}';
+    } else {
+      label.textContent = "Audio: no disponible";
+    }
+  }
+
+  function toggle_audio() {
+    if (audio_context === undefined) { setup_audio(); return; }
+    if (audio_context.state === "running")   { audio_context.suspend(); return; }
+    if (audio_context.state === "suspended") { audio_context.resume();  return; }
+    console.log("Unknown audio state:", audio_context.state);
+  }
+  </script>
+</body>
 </html>
